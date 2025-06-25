@@ -1,12 +1,12 @@
 const axios = require('axios');
 
 // Set base URL from env (or hardcode for dev)
-const PAYMENT_SERVICE_BASE_URL = process.env.FINANCE_SERVICE_URL;
+const FINANCE_SERVICE_BASE_URL = process.env.FINANCE_SERVICE_URL;
 
 async function createPayment(authHeader, bodyParams) {
   try {
     const response = await axios.post(
-      `${PAYMENT_SERVICE_BASE_URL}/payment/createPayment`,
+      `${FINANCE_SERVICE_BASE_URL}/finance/createPayment`,
       bodyParams,
       {
         headers: {
@@ -21,6 +21,25 @@ async function createPayment(authHeader, bodyParams) {
   }
 }
 
+async function getAppointmentPayments(authHeader, bodyParams) {
+  try {
+    const response = await axios.post(
+      `${FINANCE_SERVICE_BASE_URL}/finance/getAppointmentPayments`,
+      bodyParams,
+      {
+        headers: {
+          Authorization: authHeader
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.log('Error calling Payment Service:', error.message);
+    throw new Error('Unable to fetch payment');
+  }
+}
+
 module.exports = {
-  createPayment
+  createPayment,
+  getAppointmentPayments
 };

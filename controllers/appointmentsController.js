@@ -5,11 +5,10 @@ const DoctorSlotModel = require('../models/doctorSlotsModel');
 const doctorSlotSchema = require('../schemas/doctorSlotsSchema');
 const { SEQUENCE_PREFIX } = require('../utils/constants');
 const generateSlots = require('../utils/generateTimeSlots');
-const { getUserById } = require('../services/userService');
-const { createPayment } = require('../services/paymentService');
+const { getUserById, getUserDetailsBatch } = require('../services/userService');
+const { createPayment, getAppointmentPayments } = require('../services/paymentService');
 const moment = require('moment-timezone');
 
-// Create a new appointment
 exports.createAppointment = async (req, res) => {
   try {
     const { error } = appointmentSchema.validate(req.body);
@@ -140,6 +139,77 @@ exports.createDoctorSlots = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 }
+
+exports.getAppointmentsWithPayments = async (req, res) => {
+  try {
+    const {
+      doctorId,
+      appointmentType,
+      appointmentDepartment,
+      appointmentStatus,
+      appointmentDate,
+      fromDate,
+      toDate
+    } = req.query;
+
+    if (!doctorId) return res.status(400).json({ status: 'fail', message: "doctorId is required" });
+
+    const query = { doctorId };
+    if (appointmentType) query.appointmentType = appointmentType;
+    if (appointmentDepartment) query.appointmentDepartment = appointmentDepartment;
+    if (appointmentStatus) query.appointmentStatus = appointmentStatus;
+
+    if (appointmentDate) {
+      query.appointmentDate = new Date(appointmentDate);
+    }
+
+    if (fromDate || toDate) {
+      query.appointmentDate = query.appointmentDate || {};
+      if (fromDate) query.appointmentDate.$gte = new Date(fromDate);
+      if (toDate) query.appointmentDate.$lte = new Date(toDate);
+    }
+    const appointments = await appointmentModel.find(query);
+
+    if (!appointments.length) return res.status(404).json({ status: 'fail', message: "No appointments found" });
+
+    const userIdsSet = new Set();
+    appointments.forEach(appt => {
+      userIdsSet.add(appt.userId);
+      userIdsSet.add(appt.doctorId);
+    });
+    const allUserIds = Array.from(userIdsSet);
+    const userBodyParams = { userIds: allUserIds };
+    const users = await getUserDetailsBatch(req.headers.authorization, userBodyParams);
+    
+    const userMap = new Map();
+    users.forEach(user => userMap.set(user.userId, user));
+
+    const appointmentIds = appointments.map(appointment => appointment.appointmentId.toString());
+
+    const paymentBodyParams = { "appointmentIds": appointmentIds };
+
+    const { payments } = await getAppointmentPayments(req.headers.authorization, paymentBodyParams);
+
+    const paymentMap = new Map();
+    payments.forEach(payment => paymentMap.set(payment.appointmentId, payment));
+
+   const result = appointments.map(appt => {
+      const userDetails = userMap.get(appt.userId) || null;
+      const doctorDetails = userMap.get(appt.doctorId) || null;
+      return {
+        ...appt.toObject(),
+        patientDetails: userDetails,
+        doctorDetails: doctorDetails,
+        paymentDetails: paymentMap.get(appt.appointmentId.toString()) || null
+      };
+    });
+
+    res.json({ status: "success", data: result });
+  } catch (err) {
+    console.error('Error in getAppointmentsWithPayments:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
 
 async function bookSlot(doctorId, date, time, appointmentId) {
   const result = await DoctorSlotModel.updateOne(
