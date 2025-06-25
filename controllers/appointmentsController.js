@@ -95,6 +95,29 @@ exports.createAppointment = async (req, res) => {
   }
 };
 
+//getAllAppointmentCount
+exports.getAllAppointments = async (req, res) => {
+  try {
+    // Fetch all appointments without any filters
+    const appointments = await appointmentModel.find({});
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Appointments retrieved successfully',
+      data: {
+        totalAppointmentsCount: appointments.length,
+        totalAppointments: appointments,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: 'Error retrieving appointments',
+      error: error.message,
+    });
+  }
+};
+
 exports.createDoctorSlots = async (req, res) => {
   try {
     const { doctorId, date } = req.body;
