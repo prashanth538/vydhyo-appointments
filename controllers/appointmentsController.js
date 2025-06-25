@@ -234,6 +234,37 @@ exports.getAppointmentsWithPayments = async (req, res) => {
   }
 };
 
+exports.getAppointmentTypeCounts = async (req, res) => {
+  try {
+    const counts = await appointmentModel.aggregate([
+      {
+        $match: {
+          appointmentStatus: { $ne: 'cancelled' },
+          appointmentType: { $in: ['In-Person', 'Video', 'home-visit'] }
+        }
+      },
+      {
+        $group: {
+          _id: '$appointmentType',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    // Format response as { appointmentType: count }
+    const result = {
+      "In-Person": 0,
+      "Video": 0,
+      "home-visit": 0
+    };
+    counts.forEach(item => {
+      result[item._id] = item.count;
+    });
+    res.json({ result });
+  } catch (err) {
+    res.status(500).json({ status: "fail", message: err.message });
+  }
+};
+
 async function bookSlot(doctorId, date, time, appointmentId) {
   const result = await DoctorSlotModel.updateOne(
     { doctorId, date, "slots.time": time, "slots.status": "available" },
@@ -250,6 +281,8 @@ async function bookSlot(doctorId, date, time, appointmentId) {
   }
 }
 
+
+
 async function cancelSlot(doctorId, date, time) {
   await DoctorSlotModel.updateOne(
     { doctorId, date, "slots.time": time },
@@ -261,3 +294,6 @@ async function cancelSlot(doctorId, date, time) {
     }
   );
 }
+
+
+
